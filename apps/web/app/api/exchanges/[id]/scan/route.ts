@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { exchange } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { exchange, agent } from "@/lib/db/schema"
+import { eq, sql } from "drizzle-orm"
 import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 
@@ -62,14 +62,26 @@ export async function POST(
     )
   }
 
-  const { body } = await req.json()
+  const body = await req.json().catch(() => ({}))
+  const { txHash } = body
+
+  const IDR_PER_USDC = 15_000
+  const usdcAmount = Math.ceil(exch.amount / IDR_PER_USDC)
+
+  await db
+    .update(agent)
+    .set({
+      escrowBalance: sql`${agent.escrowBalance} - ${usdcAmount}`,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(agent.id, exch.agentId))
 
   await db
     .update(exchange)
     .set({
       status: "completed",
       qrNonce: "used",
-      txHash: body?.txHash || null,
+      txHash: txHash || null,
       updatedAt: new Date().toISOString(),
     })
     .where(eq(exchange.id, id))
@@ -78,5 +90,6 @@ export async function POST(
     success: true,
     exchangeId: id,
     amount: exch.amount,
+    txHash,
   })
 }

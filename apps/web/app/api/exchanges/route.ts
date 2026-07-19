@@ -62,7 +62,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Agent not found" }, { status: 404 })
   }
 
-  if (agentData.escrowBalance < amount) {
+  const IDR_PER_USDC = 15_000
+  const usdcAmount = Math.ceil(amount / IDR_PER_USDC)
+
+  if (agentData.escrowBalance < usdcAmount) {
     return NextResponse.json(
       { error: "Agent does not have enough escrow balance" },
       { status: 400 },

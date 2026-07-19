@@ -13,7 +13,12 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url)
   const minBalance = Number(searchParams.get("minBalance")) || 0
-  const currency = searchParams.get("currency") || "USD"
+  const currency = searchParams.get("currency")
+
+  let whereConditions = [gte(agent.escrowBalance, minBalance)]
+  if (currency) {
+    whereConditions.push(eq(agent.currency, currency))
+  }
 
   const agents = await db
     .select({
@@ -25,9 +30,7 @@ export async function GET(req: Request) {
       escrowBalance: agent.escrowBalance,
     })
     .from(agent)
-    .where(
-      and(eq(agent.currency, currency), gte(agent.escrowBalance, minBalance)),
-    )
+    .where(and(...whereConditions))
 
   return NextResponse.json(agents)
 }

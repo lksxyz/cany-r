@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { exchange, agent } from "@/lib/db/schema"
-import { eq, sql } from "drizzle-orm"
+import { exchange } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 
@@ -26,40 +26,28 @@ export async function POST(
     return NextResponse.json({ error: "Exchange not found" }, { status: 404 })
   }
 
-  if (exch.status !== "requested") {
+  if (exch.agentId !== session.user.id) {
     return NextResponse.json(
-      { error: "Exchange is not in requested status" },
-      { status: 400 },
-    )
-  }
-
-  const agentData = await db
-    .select()
-    .from(agent)
-    .where(eq(agent.id, exch.agentId))
-    .get()
-
-  if (!agentData || agentData.userId !== session.user.id) {
-    return NextResponse.json(
-      { error: "You are not the assigned agent" },
+      { error: "Only the assigned agent can acknowledge" },
       { status: 403 },
     )
   }
 
-  const IDR_PER_USDC = 15_000
-  const usdcAmount = Math.ceil(exch.amount / IDR_PER_USDC)
-
-  if (agentData.escrowBalance < usdcAmount) {
+  if (exch.status !== "cash_received") {
     return NextResponse.json(
-      { error: "Insufficient escrow balance" },
+      { error: "Exchange is not in cash_received status" },
       { status: 400 },
     )
   }
 
   await db
     .update(exchange)
-    .set({ status: "accepted", updatedAt: new Date().toISOString() })
+    .set({
+      status: "completed",
+      qrNonce: "used",
+      updatedAt: new Date().toISOString(),
+    })
     .where(eq(exchange.id, id))
 
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ success: true, exchangeId: id })
 }

@@ -232,7 +232,7 @@ export function LoginForm() {
     return (
       <div className="flex min-h-svh flex-col items-center justify-center px-5 py-12">
         <div className="w-full max-w-sm">
-          <div className="rounded-2xl border bg-card p-6 text-center">
+          <div className="rounded-2xl border bg-card p-6 text-center overflow-hidden">
             <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-primary/10">
               <svg
                 width="24"
@@ -251,7 +251,7 @@ export function LoginForm() {
               </svg>
             </div>
             <h2 className="text-lg font-semibold">Signed in</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 truncate text-sm text-muted-foreground">
               {session.user?.email ?? "Connected"}
             </p>
             <div className="mt-4 flex items-center justify-center gap-2 rounded-xl border bg-secondary/50 px-4 py-2.5 font-mono text-xs">

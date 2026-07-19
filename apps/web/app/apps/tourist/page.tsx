@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useAccount, useWriteContract } from "wagmi"
+import { keccak256, stringToHex } from "viem"
 import { Button } from "@workspace/ui/components/button"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -12,6 +14,14 @@ import {
   ArrowLeft01Icon,
 } from "@hugeicons/core-free-icons"
 import { toast } from "sonner"
+import { OvericeEscrowABI } from "@/abi/OvericeEscrow"
+
+const ESCROW_ADDRESS = "0x2d8308205d60a0a5B608bC60d35580d0f89F34Be"
+const MAX_AGENT_MARGIN = 1_000_000n
+const MARGIN_BPS = 500n
+const BPS_DENOM = 10_000n
+const USDC_DECIMALS = 1_000_000n
+const IDR_PER_USDC = 15_000
 
 interface Agent {
   id: string
@@ -30,6 +40,7 @@ interface Exchange {
   qrPayload?: string
   qrNonce?: string
   qrExpiresAt?: string
+  qrSignature?: string
   createdAt: string
 }
 
@@ -61,17 +72,18 @@ function NewExchangeForm({
   onCreated: () => void
 }) {
   const [amount, setAmount] = useState("")
-  const [currency, setCurrency] = useState("USD")
+  const [currency, setCurrency] = useState("IDR")
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(false)
 
   const searchAgents = useCallback(async () => {
-    const minBalance = Number(amount) || 0
-    if (minBalance <= 0) return
+    const idrAmount = Number(amount) || 0
+    if (idrAmount <= 0) return
     setFetching(true)
     try {
+      const minBalance = Math.ceil(idrAmount / IDR_PER_USDC)
       const res = await fetch(
         `/api/agents?minBalance=${minBalance}&currency=${currency}`,
       )
@@ -126,25 +138,22 @@ function NewExchangeForm({
 
       <div className="mt-6 space-y-4">
         <div>
-          <label
-            htmlFor="amount"
-            className="mb-1.5 block text-sm font-medium"
-          >
+          <label htmlFor="amount" className="mb-1.5 block text-sm font-medium">
             Cash amount
           </label>
           <div className="flex gap-3">
             <div className="relative flex-1">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                $
-              </span>
               <input
                 id="amount"
                 type="number"
                 min="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                onBlur={() => {
+                  if (Number(amount) > 0) searchAgents()
+                }}
                 placeholder="10"
-                className="h-12 w-full rounded-xl border bg-card pl-8 pr-4 text-base outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                className="h-12 w-full rounded-xl border bg-card px-4 text-base outline-none focus:border-primary focus:ring-1 focus:ring-primary"
               />
             </div>
             <select
@@ -152,20 +161,24 @@ function NewExchangeForm({
               onChange={(e) => setCurrency(e.target.value)}
               className="h-12 rounded-xl border bg-card px-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             >
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="AUD">AUD</option>
+              <option value="IDR">IDR - Indonesian Rupiah</option>
+              <option value="THB" disabled>THB - Thai Baht</option>
+              <option value="SGD" disabled>SGD - Singapore Dollar</option>
+              <option value="MYR" disabled>MYR - Malaysian Ringgit</option>
+              <option value="PHP" disabled>PHP - Philippine Peso</option>
+              <option value="VND" disabled>VND - Vietnamese Dong</option>
+              <option value="MMK" disabled>MMK - Myanmar Kyat</option>
+              <option value="KHR" disabled>KHR - Cambodian Riel</option>
+              <option value="LAK" disabled>LAK - Lao Kip</option>
+              <option value="BND" disabled>BND - Brunei Dollar</option>
             </select>
           </div>
+          {amount && Number(amount) > 0 && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              You will receive ~{(Number(amount) / IDR_PER_USDC).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC
+            </p>
+          )}
         </div>
-
-        <Button
-          onPress={searchAgents}
-          isDisabled={!amount || Number(amount) <= 0}
-          className="h-12 w-full rounded-full bg-primary text-sm font-bold text-primary-foreground"
-        >
-          {fetching ? "Searching..." : "Find Agents"}
-        </Button>
 
         {agents.length > 0 && (
           <div className="space-y-2">
@@ -288,26 +301,94 @@ function ScanQRView({
   onBack: () => void
   onDone: () => void
 }) {
+  const { address } = useAccount()
+  const { writeContractAsync } = useWriteContract()
   const [scanning, setScanning] = useState(false)
+  const [exchangeData, setExchangeData] = useState<Exchange | null>(null)
+  const [fetching, setFetching] = useState(true)
+  const expired =
+    exchangeData?.qrExpiresAt &&
+    new Date(exchangeData.qrExpiresAt) < new Date()
+
+  useEffect(() => {
+    const fetchExchange = async () => {
+      try {
+        const res = await fetch(`/api/exchanges?status=cash_received`)
+        if (res.ok) {
+          const data = await res.json()
+          const match = data.find((e: Exchange) => e.id === exchangeId)
+          setExchangeData(match || null)
+        }
+      } finally {
+        setFetching(false)
+      }
+    }
+    fetchExchange()
+  }, [exchangeId])
 
   const completeScan = async () => {
+    if (!exchangeData || !address) return
     setScanning(true)
     try {
-      const res = await fetch(`/api/exchanges/${exchangeId}/scan`, {
+      const { qrNonce, qrExpiresAt, qrSignature, amount } = exchangeData
+      if (!qrNonce || !qrExpiresAt || !qrSignature) {
+        toast.error("Missing QR data")
+        return
+      }
+
+      // Build contract params
+      const exchangeIdBytes = keccak256(stringToHex(exchangeId))
+      const nonceHash = keccak256(stringToHex(qrNonce))
+      const expiryUnix = BigInt(Math.floor(new Date(qrExpiresAt).getTime() / 1000))
+
+      const amountDec = BigInt(Math.floor(Number(amount) * Number(USDC_DECIMALS) / IDR_PER_USDC))
+      const agentMargin = (amountDec * MARGIN_BPS) / BPS_DENOM
+      const cappedMargin = agentMargin > MAX_AGENT_MARGIN ? MAX_AGENT_MARGIN : agentMargin
+      const touristAmount = amountDec
+
+      toast.loading("Releasing escrow on-chain...")
+
+      const txHash = await writeContractAsync({
+        address: ESCROW_ADDRESS,
+        abi: OvericeEscrowABI,
+        functionName: "releaseEscrow",
+        args: [
+          exchangeIdBytes,
+          address as `0x${string}`,
+          touristAmount,
+          cappedMargin,
+          BigInt(nonceHash),
+          expiryUnix,
+          qrSignature as `0x${string}`,
+        ],
+      })
+
+      toast.dismiss()
+      toast.success("USDC released to your wallet!")
+
+      // Sync DB
+      await fetch(`/api/exchanges/${exchangeId}/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ txHash }),
       })
-      if (res.ok) {
-        toast.success("USDC released to your wallet!")
-        onDone()
-      } else {
-        const err = await res.json()
-        toast.error(err.error || "Scan failed")
-      }
+
+      onDone()
+    } catch (e: unknown) {
+      toast.dismiss()
+      const msg = e instanceof Error ? e.message : "Transaction failed"
+      toast.error(msg)
     } finally {
       setScanning(false)
     }
+  }
+
+  if (fetching) {
+    return (
+      <main className="mx-auto flex w-full max-w-lg items-center justify-center py-20">
+        <p className="animate-pulse text-sm text-muted-foreground">Loading...</p>
+      </main>
+    )
   }
 
   return (
@@ -328,25 +409,50 @@ function ScanQRView({
         />
       </div>
 
-      <h2 className="text-lg font-bold tracking-tight">Scan Agent QR</h2>
+      <h2 className="text-lg font-bold tracking-tight">Complete Exchange</h2>
       <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-        Scan the QR code shown on the agent&apos;s phone to confirm and release
-        USDC.
+        Confirm to claim USDC from escrow to your wallet.
       </p>
 
-      <div className="mt-8 w-full max-w-xs rounded-xl border-2 border-dashed border-muted-foreground/30 p-8 text-center">
-        <p className="text-xs text-muted-foreground">
-          [Camera placeholder — scan QR from agent&apos;s phone]
-        </p>
-      </div>
+      {exchangeData && (
+        <div className="mt-4 w-full max-w-xs rounded-xl border bg-card p-4 text-left text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Amount</span>
+            <span className="font-semibold">
+              ${exchangeData.amount} {exchangeData.currency}
+            </span>
+          </div>
+          <div className="mt-2 flex justify-between">
+            <span className="text-muted-foreground">Network fee</span>
+            <span>0.05 USDC</span>
+          </div>
+          <div className="mt-2 flex justify-between">
+            <span className="text-muted-foreground">QR expires</span>
+            <span>
+              {exchangeData.qrExpiresAt
+                ? new Date(exchangeData.qrExpiresAt).toLocaleTimeString("en-ID", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "—"}
+            </span>
+          </div>
+        </div>
+      )}
 
-      <Button
-        onPress={completeScan}
-        isDisabled={scanning}
-        className="mt-6 h-14 w-full max-w-xs rounded-full bg-primary text-base font-bold text-primary-foreground"
-      >
-        {scanning ? "Processing..." : "Simulate Scan"}
-      </Button>
+      {expired ? (
+        <p className="mt-4 text-xs text-destructive">
+          This QR code has expired. Ask the agent to generate a new one.
+        </p>
+      ) : (
+        <Button
+          onPress={completeScan}
+          isDisabled={scanning || !exchangeData?.qrSignature}
+          className="mt-6 h-14 w-full max-w-xs rounded-full bg-primary text-base font-bold text-primary-foreground"
+        >
+          {scanning ? "Processing..." : "Claim USDC"}
+        </Button>
+      )}
     </div>
   )
 }
@@ -445,10 +551,7 @@ export default function TouristDashboard() {
       {loading ? (
         <div className="px-5 space-y-3 sm:px-6">
           {[1, 2].map((i) => (
-            <div
-              key={i}
-              className="h-24 animate-pulse rounded-xl bg-muted"
-            />
+            <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
           ))}
         </div>
       ) : (
@@ -522,13 +625,10 @@ export default function TouristDashboard() {
                           ${exch.amount} {exch.currency} → USDC
                         </div>
                         <div className="text-[10px] text-muted-foreground">
-                          {new Date(exch.createdAt).toLocaleDateString(
-                            "en-ID",
-                            {
-                              month: "short",
-                              day: "numeric",
-                            },
-                          )}
+                          {new Date(exch.createdAt).toLocaleDateString("en-ID", {
+                            month: "short",
+                            day: "numeric",
+                          })}
                         </div>
                       </div>
                     </div>

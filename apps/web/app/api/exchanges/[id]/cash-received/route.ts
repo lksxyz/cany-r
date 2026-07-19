@@ -49,30 +49,46 @@ export async function POST(
     )
   }
 
-  const nonce = generateRandomString(32, "a-z", "A-Z", "0-9")
-  const expiresAt = new Date(
+  const body = await req.json().catch(() => ({}))
+  const { nonce, expiresAt, signature } = body
+
+  if (nonce && expiresAt && signature) {
+    // Step 2: store signature and finalize
+    await db
+      .update(exchange)
+      .set({
+        status: "cash_received",
+        qrNonce: String(nonce),
+        qrExpiresAt: expiresAt,
+        qrSignature: signature,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(exchange.id, id))
+
+    return NextResponse.json({
+      success: true,
+      nonce,
+      expiresAt,
+      signature,
+    })
+  }
+
+  // Step 1: generate nonce + expiry for agent to sign
+  const newNonce = generateRandomString(32, "a-z", "A-Z", "0-9")
+  const newExpiresAt = new Date(
     Date.now() + QR_EXPIRY_MINUTES * 60 * 1000,
   ).toISOString()
 
-  await db
-    .update(exchange)
-    .set({
-      status: "cash_received",
-      qrNonce: nonce,
-      qrExpiresAt: expiresAt,
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(exchange.id, id))
-
   const qrPayload = JSON.stringify({
     exchangeId: id,
-    nonce,
-    expiresAt,
+    nonce: newNonce,
+    expiresAt: newExpiresAt,
   })
 
   return NextResponse.json({
     qrPayload,
-    nonce,
-    expiresAt,
+    nonce: newNonce,
+    expiresAt: newExpiresAt,
+    needsSignature: true,
   })
 }
