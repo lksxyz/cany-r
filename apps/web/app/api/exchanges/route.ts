@@ -15,7 +15,16 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const status = searchParams.get("status")
 
-  const conditions = [or(eq(exchange.touristId, session.user.id), eq(exchange.agentId, session.user.id))]
+  const agentRecord = await db
+    .select({ id: agent.id })
+    .from(agent)
+    .where(eq(agent.userId, session.user.id))
+    .get()
+
+  const conditions = [eq(exchange.touristId, session.user.id)]
+  if (agentRecord) {
+    conditions.push(eq(exchange.agentId, agentRecord.id))
+  }
 
   if (status) {
     conditions.push(eq(exchange.status, status))
@@ -24,7 +33,7 @@ export async function GET(req: Request) {
   const exchanges = await db
     .select()
     .from(exchange)
-    .where(and(...conditions))
+    .where(or(...conditions))
     .orderBy(desc(exchange.createdAt))
 
   return NextResponse.json(exchanges)
