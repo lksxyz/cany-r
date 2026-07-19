@@ -1,9 +1,11 @@
-import { createClient } from "@libsql/client"
+import { config } from "dotenv"
 import { drizzle } from "drizzle-orm/libsql"
 
-const client = createClient({
-  url: process.env.DATABASE_URL || "file:./data.db",
-  authToken: process.env.TURSO_AUTH_TOKEN,
-})
+config({ path: ".env" }) // or .env.local
 
-export const db = drizzle(client)
+export const db = drizzle({
+  connection: {
+    url: process.env.TURSO_CONNECTION_URL!,
+    authToken: process.env.TURSO_AUTH_TOKEN!,
+  },
+})
