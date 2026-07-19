@@ -6,6 +6,7 @@ import { SiweMessage } from "siwe"
 import { useAccount, useConnect, useSignMessage } from "wagmi"
 import { authClient } from "@/lib/auth-client"
 import { Button, LinkButton } from "@workspace/ui/components/button"
+import { WalletGuard } from "@/components/wallet-guard"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   WalletAdd01Icon,
@@ -326,14 +327,16 @@ export function LoginForm() {
         </div>
 
         <div className="mt-8 rounded-xl border bg-card p-6">
-          <ConnectStep
-            isConnected={isConnected}
-            address={address}
-            onConnect={connectWallet}
-            onSignIn={signIn}
-            loading={loading}
-            walletAvailable={walletAvailable}
-          />
+          <WalletGuard>
+            <ConnectStep
+              isConnected={isConnected}
+              address={address}
+              onConnect={connectWallet}
+              onSignIn={signIn}
+              loading={loading}
+              walletAvailable={walletAvailable}
+            />
+          </WalletGuard>
 
           {(error || connectError) && (
             <motion.p
