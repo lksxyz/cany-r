@@ -1,16 +1,40 @@
-import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
-import { Avatar, AvatarFallback, AvatarImage } from "@workspace/ui/components/avatar"
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@workspace/ui/components/alert"
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@workspace/ui/components/avatar"
 import { Badge } from "@workspace/ui/components/badge"
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage } from "@workspace/ui/components/breadcrumb"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from "@workspace/ui/components/breadcrumb"
 import { Button } from "@workspace/ui/components/button"
 import { ButtonGroup } from "@workspace/ui/components/button-group"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Input } from "@workspace/ui/components/input"
 import { Kbd, KbdGroup } from "@workspace/ui/components/kbd"
 import { Label } from "@workspace/ui/components/label"
 import { Progress } from "@workspace/ui/components/progress"
-import { RadioGroup, RadioGroupItem } from "@workspace/ui/components/radio-group"
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@workspace/ui/components/radio-group"
 import { Separator } from "@workspace/ui/components/separator"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 import { Slider } from "@workspace/ui/components/slider"
@@ -23,7 +47,7 @@ export default function ComponentsPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-12 p-6">
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Components</h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           Reference for shadcn/ui primitives available in{" "}
           <KbdGroup>
             <Kbd>@workspace/ui/components</Kbd>
@@ -50,7 +74,7 @@ export default function ComponentsPage() {
           <Button variant="destructive">Destructive</Button>
           <Button variant="link">Link</Button>
         </div>
-        <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           Sizes:
           <Button size="sm">sm</Button>
           <Button>default</Button>
@@ -167,7 +191,13 @@ export default function ComponentsPage() {
       </Section>
 
       <Section title="Slider">
-        <Slider defaultValue={[50]} minValue={0} maxValue={100} step={1} className="max-w-sm" />
+        <Slider
+          defaultValue={[50]}
+          minValue={0}
+          maxValue={100}
+          step={1}
+          className="max-w-sm"
+        />
       </Section>
 
       <Section title="Progress">
@@ -195,7 +225,13 @@ export default function ComponentsPage() {
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold">{title}</h2>

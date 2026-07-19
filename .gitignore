@@ -40,6 +40,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# drizzle / sqlite
+*.db
+apps/web/drizzle/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

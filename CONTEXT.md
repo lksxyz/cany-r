@@ -1,0 +1,124 @@
+# 0verice
+
+**Tagline**: "Turn your travel leftovers into USDC, instantly."
+
+Peer-to-peer foreign currency exchange platform for tourists in Indonesia.
+Tourist with leftover foreign cash meets a verified local agent; agent holds
+USDC in an on-chain escrow (Monad), tourist hands over physical cash, escrow
+releases USDC to the tourist.
+
+## Flow
+
+1. **Tourist creates a request** — inputs cash amount and currency. System
+   filters agents whose escrow balance ≥ request amount.
+2. **Tourist picks an agent** — from the filtered list.
+3. **Agent accepts** — allocates the amount from their escrow balance
+   (off-chain lock). On-chain balance unchanged; only the app marks it
+   as reserved.
+4. **Meet in person** — Tourist and Agent exchange cash IRL.
+5. **Agent confirms cash received** — Agent taps "Cash Received" in app.
+   A QR code appears on the Agent's screen. QR encodes
+   `exchangeId + nonce + expiry` and is signed by the Agent's wallet.
+6. **Tourist scans QR** — Tourist scans the Agent's QR. Smart contract
+   releases USDC from escrow to Tourist. QR is single-use, expires in 5
+   minutes.
+7. **Done** — Escrow distributes: Tourist amount → Tourist,
+   0.05 USDC Platform Fee → Platform wallet, Agent Margin → Agent.
+
+## Exchange Statuses
+
+| Status | Meaning |
+|---|---|
+| `requested` | Tourist created request, waiting for Agent to accept |
+| `accepted` | Agent accepted, amount locked from escrow balance |
+| `cash_received` | Agent confirmed cash in hand, QR active |
+| `completed` | QR scanned, USDC released on-chain |
+| `cancelled` | Cancelled by either party before completion |
+| `expired` | Timed out (auto-cancelled by the system) |
+
+## Anti-Fraud
+
+| Risk | Mechanism |
+|--------|-----------|
+| Tourist fakes handover | QR is **Agent-side only**. Agent triggers QR after verifying cash in hand. Tourist cannot force release. |
+| QR reused | `exchangeId + nonce + timestamp`, signed by Agent wallet. Single-use, invalid after first scan. |
+| QR replayed later | 5-minute expiry. Timestamp validated both off-chain and on-chain. |
+| Agent no-show after accepting | Auto-cancel + refund escrow lock after X time. Repeat offender gets banned. |
+| Agent never deposits | System only shows agents with verified on-chain escrow balance ≥ request. Cannot accept without balance. |
+| Spam exchanges | Max 3 active exchanges per user. |
+| Dispute | Admin manual override (last resort, rare). |
+
+## Pricing
+
+**Platform Fee**: 0.05 USDC flat per exchange. Irrespective of exchange size.
+
+**Agent Margin**: 5% of the exchange value, capped at 1 USDC maximum per
+exchange. If 5% exceeds 1 USDC (i.e., exchange ≥ 20 USDC), the margin is
+fixed at 1 USDC.
+
+**Exchange Rate**: Set by the Platform. Includes the spread between market
+rate and the rate charged to the Tourist. The spread covers Platform Fee +
+Agent Margin + any market buffer.
+
+**Escrow Distribution** (on completion):
+- Tourist amount → Tourist wallet
+- 0.05 USDC → Platform wallet
+- Agent Margin → Agent wallet
+
+## Timeouts
+
+- `requested` → auto-cancel if not accepted within 1 hour
+- `accepted` → auto-cancel if Agent doesn't confirm cash within 2 hours
+- `cash_received` → auto-cancel (refund) if QR not scanned within 30 minutes
+
+## Target Market
+
+**Tourist segments**: Backpacker (small leftovers, ≥$10 equiv) + middle-class
+tourists (€20–200 sisa). Pain point: money changers reject small amounts/coins,
+inconvenient location, predatory airport rates.
+
+**Geography**: Bali, Indonesia (pilot). High tourist volume, existing crypto
+community.
+
+**Value proposition for Tourist**: Convenience (find local verified agents via
+app), small amounts accepted, escrow security.
+
+**Value proposition for Agent**: Profit margin (5% capped at 1 USDC per
+exchange), access to foreign currency, verified transactions via platform.
+
+## Language
+
+**Tourist**:
+A traveller holding foreign physical currency they want to exchange for USDC.
+_Avoid_: User, customer, traveller
+
+**Agent**:
+A verified local party who holds USDC and wants to acquire foreign physical
+currency from tourists.
+_Avoid_: Merchant, seller, exchanger
+
+**Escrow**:
+An on-chain smart contract (Monad) that holds an Agent's USDC balance.
+Agents pre-fund their escrow (top-up once, used across many exchanges).
+Off-chain DB syncs the on-chain balance for fast filtering.
+_Avoid_: Vault, hold, deposit lock
+
+**Exchange**:
+A single request-to-completion flow connecting one Tourist with one Agent.
+Tracks status, amount, QR nonce, and on-chain tx hash.
+_Avoid_: Trade, transaction, swap
+
+**Platform**:
+0verice itself — the app and smart contracts that connect Tourists and Agents
+and manage Escrow.
+_Avoid_: App, system, service
+
+**Escrow Balance**:
+The amount of USDC an Agent has deposited into the smart contract. Synced
+off-chain for filtering. Agents can top-up or withdraw freely. An Agent
+with zero balance does not appear in any Tourist's agent list.
+
+**QR Verification**:
+A single-use, time-bound QR code generated by the Agent's app after
+confirming cash receipt. Encodes `exchangeId + nonce + expiry`, signed by
+the Agent's wallet. Scanning triggers on-chain USDC release.
